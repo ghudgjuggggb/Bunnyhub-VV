@@ -1,0 +1,326 @@
+-- BunnyHub v4 (Full Script with Loader + QuickButtons + Speed Fix + Movable Menu + Rounded Loader)
+-- Features: Speed Slider, BunnyHop, AutoJump(always), ForceSpeed, Invisible
+-- Multilang: EN/RU
+
+local settings = {
+    Language = "EN", -- "EN" or "RU"
+    Speed = 16
+}
+
+local Texts = {
+    EN = {
+        Title = "BunnyHub",
+        Speed = "Speed",
+        BunnyHop = "BunnyHop",
+        AutoJump = "AutoJump",
+        ForceSpeed = "ForceSpeed",
+        Invisible = "Invisible",
+        MenuToggle = "≡",
+        ON = "ON",
+        OFF = "OFF",
+        Loading = "Loading..."
+    },
+    RU = {
+        Title = "BunnyHub",
+        Speed = "Скорость",
+        BunnyHop = "БанниХоп",
+        AutoJump = "АвтоПрыжок",
+        ForceSpeed = "Скорость(BV)",
+        Invisible = "Невидимость",
+        MenuToggle = "≡",
+        ON = "ВКЛ",
+        OFF = "ВЫКЛ",
+        Loading = "Загрузка..."
+    }
+}
+
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local player = Players.LocalPlayer
+
+-- GUI
+local gui = Instance.new("ScreenGui", game.CoreGui)
+gui.ResetOnSpawn = false
+
+-- Loader Screen
+local loader = Instance.new("Frame", gui)
+loader.Size = UDim2.new(0.5,0,0.2,0)
+loader.AnchorPoint = Vector2.new(0.5,0.5)
+loader.Position = UDim2.new(0.5,0,0.5,0)
+loader.BackgroundColor3 = Color3.fromRGB(20,20,20)
+local loaderCorner = Instance.new("UICorner", loader)
+loaderCorner.CornerRadius = UDim.new(0,15)
+
+local loadLabel = Instance.new("TextLabel", loader)
+loadLabel.AnchorPoint = Vector2.new(0.5,0.5)
+loadLabel.Position = UDim2.new(0.5,0,0.35,0)
+loadLabel.Size = UDim2.new(0.9,0,0.3,0)
+loadLabel.Text = Texts[settings.Language].Loading.." 0%"
+loadLabel.TextColor3 = Color3.new(1,1,1)
+loadLabel.Font = Enum.Font.GothamBold
+loadLabel.TextSize = 28
+loadLabel.BackgroundTransparency = 1
+
+local loadBarBack = Instance.new("Frame", loader)
+loadBarBack.AnchorPoint = Vector2.new(0.5,0.5)
+loadBarBack.Position = UDim2.new(0.5,0,0.65,0)
+loadBarBack.Size = UDim2.new(0.9,0,0.2,0)
+loadBarBack.BackgroundColor3 = Color3.fromRGB(60,60,60)
+local loadBarBackCorner = Instance.new("UICorner", loadBarBack)
+loadBarBackCorner.CornerRadius = UDim.new(0,10)
+
+local loadBarFill = Instance.new("Frame", loadBarBack)
+loadBarFill.Size = UDim2.new(0,0,1,0)
+loadBarFill.BackgroundColor3 = Color3.fromRGB(0,170,255)
+local loadBarFillCorner = Instance.new("UICorner", loadBarFill)
+loadBarFillCorner.CornerRadius = UDim.new(0,10)
+
+task.spawn(function()
+    for i = 1,100 do
+        loadBarFill.Size = UDim2.new(i/100,0,1,0)
+        loadLabel.Text = Texts[settings.Language].Loading.." "..i.."%"
+        task.wait(0.02)
+    end
+    TweenService:Create(loader, TweenInfo.new(1), {BackgroundTransparency = 1}):Play()
+    TweenService:Create(loadLabel, TweenInfo.new(1), {TextTransparency = 1}):Play()
+    TweenService:Create(loadBarBack, TweenInfo.new(1), {BackgroundTransparency = 1}):Play()
+    TweenService:Create(loadBarFill, TweenInfo.new(1), {BackgroundTransparency = 1}):Play()
+    task.wait(1)
+    loader:Destroy()
+end)
+
+-- Toggle button
+local toggleBtn = Instance.new("TextButton", gui)
+toggleBtn.Size = UDim2.new(0,40,0,40)
+toggleBtn.Position = UDim2.new(0,10,0.5,-20)
+toggleBtn.Text = Texts[settings.Language].MenuToggle
+toggleBtn.BackgroundColor3 = Color3.fromRGB(50,50,50)
+toggleBtn.TextColor3 = Color3.new(1,1,1)
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 22
+
+-- Side Menu
+local menu = Instance.new("Frame", gui)
+menu.Size = UDim2.new(0,250,0,380)
+menu.Position = UDim2.new(0,-250,0.5,-190)
+menu.BackgroundColor3 = Color3.fromRGB(30,30,30)
+
+local title = Instance.new("TextLabel", menu)
+title.Size = UDim2.new(1,0,0,40)
+title.Text = Texts[settings.Language].Title
+title.TextColor3 = Color3.new(1,1,1)
+title.BackgroundColor3 = Color3.fromRGB(50,50,50)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 16
+
+-- Drag menu (Mouse + Touch)
+local draggingMenu = false
+local dragOffset = Vector2.new(0,0)
+menu.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        draggingMenu = true
+        dragOffset = Vector2.new(input.Position.X - menu.AbsolutePosition.X, input.Position.Y - menu.AbsolutePosition.Y)
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                draggingMenu = false
+            end
+        end)
+    end
+end)
+menu.InputChanged:Connect(function(input)
+    if draggingMenu and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        menu.Position = UDim2.new(0, input.Position.X - dragOffset.X, 0, input.Position.Y - dragOffset.Y)
+    end
+end)
+
+local open = false
+toggleBtn.MouseButton1Click:Connect(function()
+    open = not open
+    menu:TweenPosition(
+        open and UDim2.new(0,10,0.5,-190) or UDim2.new(0,-250,0.5,-190),
+        "Out","Quad",0.3,true
+    )
+end)
+
+-- Vars
+local bunnyEnabled = false
+local autoJumpEnabled = false
+local forceSpeedEnabled = false
+local invisibleEnabled = false
+
+-- QuickButtons holder
+local quickFrame = Instance.new("Frame", gui)
+quickFrame.Size = UDim2.new(0,120,1,0)
+quickFrame.Position = UDim2.new(1,-120,0,0)
+quickFrame.BackgroundTransparency = 1
+
+-- Button creation
+local function makeBtn(text, y)
+    local btn = Instance.new("TextButton", menu)
+    btn.Size = UDim2.new(1,-60,0,30)
+    btn.Position = UDim2.new(0,10,0,y)
+    btn.BackgroundColor3 = Color3.fromRGB(70,70,70)
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 14
+    btn.Text = text..": "..Texts[settings.Language].OFF
+
+    local plus = Instance.new("TextButton", menu)
+    plus.Size = UDim2.new(0,30,0,30)
+    plus.Position = UDim2.new(1,-40,0,y)
+    plus.Text = "+"
+    plus.BackgroundColor3 = Color3.fromRGB(90,90,90)
+    plus.TextColor3 = Color3.new(1,1,1)
+
+    return btn, plus
+end
+
+local function toggle(var, btn, label)
+    _G[var] = not _G[var]
+    btn.Text = label..": "..(_G[var] and Texts[settings.Language].ON or Texts[settings.Language].OFF)
+    btn.BackgroundColor3 = _G[var] and Color3.fromRGB(0,170,255) or Color3.fromRGB(70,70,70)
+    return _G[var]
+end
+
+local function makeQuick(name, toggleFunc)
+    local q = Instance.new("TextButton", quickFrame)
+    q.Size = UDim2.new(1,-10,0,30)
+    q.Position = UDim2.new(0,5,0,#quickFrame:GetChildren()*35)
+    q.BackgroundColor3 = Color3.fromRGB(70,70,70)
+    q.TextColor3 = Color3.new(1,1,1)
+    q.Font = Enum.Font.GothamBold
+    q.TextSize = 14
+    q.Text = name
+    q.MouseButton1Click:Connect(function()
+        toggleFunc()
+    end)
+    return q
+end
+
+-- Создаем кнопки
+local bunnyBtn, bunnyPlus = makeBtn(Texts[settings.Language].BunnyHop, 50)
+local autoBtn, autoPlus = makeBtn(Texts[settings.Language].AutoJump, 90)
+local forceBtn, forcePlus = makeBtn(Texts[settings.Language].ForceSpeed, 130)
+local invisBtn, invisPlus = makeBtn(Texts[settings.Language].Invisible, 170)
+
+-- Speed Slider
+local speedLabel = Instance.new("TextLabel", menu)
+speedLabel.Size = UDim2.new(1,-20,0,20)
+speedLabel.Position = UDim2.new(0,10,0,220)
+speedLabel.BackgroundTransparency = 1
+speedLabel.TextColor3 = Color3.new(1,1,1)
+speedLabel.Font = Enum.Font.GothamBold
+speedLabel.TextSize = 14
+speedLabel.TextXAlignment = Enum.TextXAlignment.Left
+speedLabel.Text = Texts[settings.Language].Speed..": "..settings.Speed
+
+local sliderBar = Instance.new("Frame", menu)
+sliderBar.Size = UDim2.new(1,-20,0,10)
+sliderBar.Position = UDim2.new(0,10,0,245)
+sliderBar.BackgroundColor3 = Color3.fromRGB(70,70,70)
+
+local sliderFill = Instance.new("Frame", sliderBar)
+sliderFill.Size = UDim2.new(settings.Speed/100,0,1,0)
+sliderFill.BackgroundColor3 = Color3.fromRGB(0,170,255)
+
+local sliderButton = Instance.new("TextButton", sliderBar)
+sliderButton.Size = UDim2.new(0,15,1,0)
+sliderButton.Position = UDim2.new(settings.Speed/100,0,0,0)
+sliderButton.Text = ""
+sliderButton.BackgroundColor3 = Color3.fromRGB(0,120,255)
+sliderButton.AutoButtonColor = false
+
+local dragging = false
+sliderButton.MouseButton1Down:Connect(function() dragging = true end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local mouseX = UserInputService:GetMouseLocation().X
+        local absPos = sliderBar.AbsolutePosition.X
+        local absSize = sliderBar.AbsoluteSize.X
+        local val = math.clamp((mouseX-absPos)/absSize,0,1)
+        settings.Speed = math.floor(val*100)
+        sliderFill.Size = UDim2.new(val,0,1,0)
+        sliderButton.Position = UDim2.new(val,0,0,0)
+        speedLabel.Text = Texts[settings.Language].Speed..": "..settings.Speed
+    end
+end)
+
+-- Toggles
+bunnyBtn.MouseButton1Click:Connect(function() bunnyEnabled = toggle("BunnyHop", bunnyBtn, Texts[settings.Language].BunnyHop) end)
+autoBtn.MouseButton1Click:Connect(function() autoJumpEnabled = toggle("AutoJump", autoBtn, Texts[settings.Language].AutoJump) end)
+forceBtn.MouseButton1Click:Connect(function() forceSpeedEnabled = toggle("ForceSpeed", forceBtn, Texts[settings.Language].ForceSpeed) end)
+invisBtn.MouseButton1Click:Connect(function()
+    invisibleEnabled = toggle("Invisible", invisBtn, Texts[settings.Language].Invisible)
+    local char = player.Character
+    if char then
+        for _,v in pairs(char:GetDescendants()) do
+            if v:IsA("BasePart") and v.Name~="HumanoidRootPart" then
+                v.LocalTransparencyModifier = invisibleEnabled and 1 or 0
+            elseif v:IsA("Decal") then
+                v.Transparency = invisibleEnabled and 1 or 0
+            end
+        end
+    end
+end)
+
+-- QuickButtons creation
+local quickMap = {}
+local function connectPlus(plus, funcName, btnFunc)
+    plus.MouseButton1Click:Connect(function()
+        if quickMap[funcName] then
+            quickMap[funcName]:Destroy()
+            quickMap[funcName] = nil
+            plus.Text = "+"
+        else
+            quickMap[funcName] = makeQuick(funcName, btnFunc)
+            plus.Text = "-"
+        end
+    end)
+end
+
+connectPlus(bunnyPlus, "BunnyHop", function() bunnyEnabled = toggle("BunnyHop", bunnyBtn, Texts[settings.Language].BunnyHop) end)
+connectPlus(autoPlus, "AutoJump", function() autoJumpEnabled = toggle("AutoJump", autoBtn, Texts[settings.Language].AutoJump) end)
+connectPlus(forcePlus, "ForceSpeed", function() forceSpeedEnabled = toggle("ForceSpeed", forceBtn, Texts[settings.Language].ForceSpeed) end)
+connectPlus(invisPlus, "Invisible", function() invisibleEnabled = toggle("Invisible", invisBtn, Texts[settings.Language].Invisible) end)
+
+-- Main loop (fixed Speed)
+RunService.RenderStepped:Connect(function()
+    local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+    local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+
+    if humanoid then
+        if not forceSpeedEnabled then
+            humanoid.WalkSpeed = settings.Speed
+        end
+
+        if bunnyEnabled and humanoid.FloorMaterial ~= Enum.Material.Air then
+            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+
+        if autoJumpEnabled then
+            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end
+
+    if hrp then
+        if forceSpeedEnabled then
+            local bv = hrp:FindFirstChild("BunnyHubForce") or Instance.new("BodyVelocity")
+            bv.Name = "BunnyHubForce"
+            bv.MaxForce = Vector3.new(1e5,0,1e5)
+            bv.Velocity = hrp.CFrame.LookVector * settings.Speed
+            bv.Parent = hrp
+        else
+            if hrp:FindFirstChild("BunnyHubForce") then
+                hrp:FindFirstChild("BunnyHubForce"):Destroy()
+            end
+        end
+    end
+end)
