@@ -1,9 +1,3 @@
--- ============================================================
---   ASTRA HUB | Demonology Script
---   UI: Rayfield Library
---   Version: 2.0.0  (Evidence + Deduction update)
--- ============================================================
-
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Players          = game:GetService("Players")
@@ -20,9 +14,6 @@ local Humanoid    = Character:WaitForChild("Humanoid")
 local RootPart    = Character:WaitForChild("HumanoidRootPart")
 local Camera      = workspace.CurrentCamera
 
--- ============================================================
---  STATE FLAGS
--- ============================================================
 local State = {
     GhostESP       = false,
     EvidenceESP    = false,
@@ -39,9 +30,6 @@ local State = {
     RemovePostFX   = false,
 }
 
--- ============================================================
---  EVIDENCE CHECKLIST STATE
--- ============================================================
 local EvidenceFound = {
     ["EMF Level 5"]     = false,
     ["Handprints"]      = false,
@@ -53,9 +41,6 @@ local EvidenceFound = {
     ["Wither"]          = false,
 }
 
--- ============================================================
---  GHOST DATABASE  (23 ghosts × 3 evidence)
--- ============================================================
 local GHOST_DATA = {
     { name = "Aswang",     evidence = {"Wither","EMF Level 5","Ghost Writing"},          ability = "Speed ↑ per kill. Salt slows them." },
     { name = "Banshee",    evidence = {"Ghost Orb","Handprints","Freezing Temps"},       ability = "Breaks multiple windows. Unique wail at hunt start." },
@@ -82,16 +67,12 @@ local GHOST_DATA = {
     { name = "Wraith",     evidence = {"EMF Level 5","Spirit Box","Laser Projector"},    ability = "Drains energy fast (~0.3%/s). Doesn't disturb salt." },
 }
 
--- ============================================================
---  DEDUCTION LOGIC
--- ============================================================
 local function deduceGhosts()
     local selected = {}
     for ev, found in pairs(EvidenceFound) do
         if found then table.insert(selected, ev) end
     end
     if #selected == 0 then return 0, {} end
-
     local possible = {}
     for _, ghost in ipairs(GHOST_DATA) do
         local match = true
@@ -107,21 +88,15 @@ local function deduceGhosts()
     return #selected, possible
 end
 
--- ============================================================
---  ESP OBJECTS / LIGHTING CACHE
--- ============================================================
 local ESPObjects    = {}
 local OriginalLight = {}
 local FlyBodyVel    = nil
 local FlyBodyGyro   = nil
 
--- ============================================================
---  RAYFIELD WINDOW
--- ============================================================
 local Window = Rayfield:CreateWindow({
     Name            = "Astra Hub",
     LoadingTitle    = "Astra Hub",
-    LoadingSubtitle = "Demonology Edition v2.0",
+    LoadingSubtitle = "Demonology Edition v1.0",
     ConfigurationSaving = {
         Enabled    = true,
         FolderName = "AstraHub",
@@ -131,9 +106,6 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false,
 })
 
--- ============================================================
---  HELPER: Find Ghost
--- ============================================================
 local function findGhost()
     for _, name in ipairs({"Ghost","GhostModel","Spirit","Entity"}) do
         local obj = workspace:FindFirstChild(name, true)
@@ -159,9 +131,6 @@ local function getGhostType()
         or "Unknown"
 end
 
--- ============================================================
---  HELPER: ESP Core
--- ============================================================
 local function addESP(obj, fillColor, outlineColor, labelText)
     if not obj or not obj.Parent then return end
     if ESPObjects[obj] then return end
@@ -228,9 +197,6 @@ local function clearAllESP()
     for obj in pairs(ESPObjects) do removeESP(obj) end
 end
 
--- ============================================================
---  ESP SCANNERS
--- ============================================================
 local function scanGhostESP()
     local ghost = findGhost()
     if ghost then
@@ -242,39 +208,72 @@ local function scanGhostESP()
     end
 end
 
--- Updated: includes Laser Projector + Wither
-local EVIDENCE_KEYWORDS = {
-    "Fingerprint","Handprint","Footprint","Footstep",
-    "GhostOrb","Orb","FreezingTemp",
-    "EMF","SpiritBox","Writing","GhostWriting",
-    "Evidence","CursedItem","Cursed",
-    "LaserProjector","Laser","Wither","WitherMark",
+local EVIDENCE_EXACT = {
+    "GhostOrb", "Ghost_Orb", "Orb",
+    "Handprint", "HandPrint", "Fingerprint",
+    "Footprint", "Footstep",
+    "EMFReading", "EMF5", "EMFLevel5",
+    "SpiritBox", "Spirit_Box",
+    "FreezingTemp", "FreezingTemperature",
+    "GhostWriting", "Ghost_Writing",
+    "LaserProjector", "Laser_Projector", "LaserDot",
+    "WitherMark", "Wither_Mark", "WitherTrace",
 }
 
-local function isEvidence(name)
-    for _, kw in ipairs(EVIDENCE_KEYWORDS) do
-        if name:lower():find(kw:lower()) then return true, kw end
+local function isEvidenceExact(name)
+    local lower = name:lower()
+    for _, kw in ipairs(EVIDENCE_EXACT) do
+        if lower == kw:lower() then return true, kw end
     end
     return false, nil
 end
 
+local function isEvidenceParent(name)
+    local lower = name:lower()
+    local parentKW = {
+        "ghostorb","handprint","fingerprint","footprint","footstep",
+        "emflevel5","emf5","spiritbox","freezingtemp","ghostwriting",
+        "laserprojecter","laserprojector","withermark","withertrace",
+    }
+    for _, kw in ipairs(parentKW) do
+        if lower:find(kw) then return true, kw end
+    end
+    return false, nil
+end
+
+local function isPlayerPart(obj)
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character and obj:IsDescendantOf(p.Character) then return true end
+    end
+    return false
+end
+
 local function scanEvidenceESP()
     for _, obj in ipairs(workspace:GetDescendants()) do
-        if (obj:IsA("BasePart") or obj:IsA("Model")) and obj.Parent then
-            local ok, kw = isEvidence(obj.Name)
-            if not ok and obj.Parent then ok, kw = isEvidence(obj.Parent.Name) end
-            if ok then
+        if isPlayerPart(obj) then continue end
+        if obj:IsA("Model") then
+            local ok, kw = isEvidenceParent(obj.Name)
+            if ok and not ESPObjects[obj] then
                 addESP(obj,
                     Color3.fromRGB(255, 200, 0),
                     Color3.fromRGB(255, 240, 0),
-                    "🔍 " .. (kw or "Evidence")
+                    "🔍 " .. (kw or obj.Name)
+                )
+            end
+        elseif obj:IsA("BasePart") then
+            if obj.Parent and obj.Parent:IsA("Model") and ESPObjects[obj.Parent] then continue end
+            local ok, kw = isEvidenceExact(obj.Name)
+            if ok and not ESPObjects[obj] then
+                addESP(obj,
+                    Color3.fromRGB(255, 200, 0),
+                    Color3.fromRGB(255, 240, 0),
+                    "🔍 " .. (kw or obj.Name)
                 )
             end
         end
     end
 end
 
--- Updated: includes LaserProjector + LIDAR
 local ITEM_KEYWORDS = {
     "Thermometer","EMFReader","Camera","SpiritBox",
     "UVLight","Flashlight","Crucifix","VideoCamera",
@@ -292,6 +291,7 @@ end
 
 local function scanItemESP()
     for _, obj in ipairs(workspace:GetDescendants()) do
+        if isPlayerPart(obj) then continue end
         if (obj:IsA("Model") or obj:IsA("Tool") or obj:IsA("BasePart")) and obj.Parent then
             local ok, kw = isItem(obj.Name)
             if ok then
@@ -309,6 +309,7 @@ local FINGERPRINT_KEYWORDS = {"Fingerprint","Handprint","Footprint","Footstep","
 
 local function scanFingerprintESP()
     for _, obj in ipairs(workspace:GetDescendants()) do
+        if isPlayerPart(obj) then continue end
         if obj:IsA("BasePart") and obj.Parent then
             for _, kw in ipairs(FINGERPRINT_KEYWORDS) do
                 if obj.Name:lower():find(kw:lower()) then
@@ -324,9 +325,6 @@ local function scanFingerprintESP()
     end
 end
 
--- ============================================================
---  ESP LOOP
--- ============================================================
 local function startESPLoop(stateKey, scanFn, interval)
     task.spawn(function()
         while State[stateKey] do
@@ -336,9 +334,59 @@ local function startESPLoop(stateKey, scanFn, interval)
     end)
 end
 
--- ============================================================
---  TAB 1 — 👻 GHOST INFO
--- ============================================================
+local function detectHunt()
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BoolValue") then
+            local n = obj.Name:lower()
+            if (n:find("hunt") or n:find("chasing") or n:find("attacking")) and obj.Value then
+                return true
+            end
+        end
+        if obj:IsA("IntValue") or obj:IsA("NumberValue") then
+            local n = obj.Name:lower()
+            if (n:find("hunt") or n:find("phase") or n:find("chasing")) and obj.Value > 0 then
+                return true
+            end
+        end
+        if obj:IsA("StringValue") then
+            local n = obj.Name:lower()
+            local v = obj.Value:lower()
+            if n:find("state") or n:find("phase") or n:find("ghoststate") then
+                if v:find("hunt") or v:find("chase") or v:find("attack") then
+                    return true
+                end
+            end
+        end
+        if obj:IsA("Model") then
+            local attrs = obj:GetAttributes()
+            for k, v in pairs(attrs) do
+                local kl = k:lower()
+                if (kl:find("hunt") or kl:find("chasing") or kl:find("attacking")) and v then
+                    return true
+                end
+            end
+        end
+    end
+    local ghost = findGhost()
+    if ghost then
+        local a = ghost:GetAttributes()
+        for k, v in pairs(a) do
+            local kl = k:lower()
+            if (kl:find("hunt") or kl:find("active") or kl:find("phase")) and v then
+                if type(v) == "boolean" and v then return true end
+                if type(v) == "number" and v > 0 then return true end
+                if type(v) == "string" and (v:lower():find("hunt") or v:lower():find("active")) then return true end
+            end
+        end
+        for _, child in ipairs(ghost:GetDescendants()) do
+            if child:IsA("BoolValue") and child.Name:lower():find("hunt") and child.Value then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 local GhostTab = Window:CreateTab("👻 Ghost", 4483362458)
 
 GhostTab:CreateSection("Identification")
@@ -411,22 +459,13 @@ GhostTab:CreateSection("Evidence Reference (all 8 types)")
 GhostTab:CreateLabel("📡 EMF Level 5  |  🖐 Handprints  |  📻 Spirit Box  |  🔮 Ghost Orb")
 GhostTab:CreateLabel("🧊 Freezing Temps  |  📝 Ghost Writing  |  🔦 Laser Projector  |  💀 Wither")
 
--- ============================================================
---  TAB 2 — 📋 EVIDENCE CHECKLIST
--- ============================================================
 local EvidTab = Window:CreateTab("📋 Evidence", 4483362458)
 
 EvidTab:CreateSection("Mark Evidence Found")
 
 local EVIDENCE_LIST = {
-    "EMF Level 5",
-    "Handprints",
-    "Spirit Box",
-    "Ghost Orb",
-    "Freezing Temps",
-    "Ghost Writing",
-    "Laser Projector",
-    "Wither",
+    "EMF Level 5","Handprints","Spirit Box","Ghost Orb",
+    "Freezing Temps","Ghost Writing","Laser Projector","Wither",
 }
 
 local EVIDENCE_ICONS = {
@@ -460,12 +499,10 @@ EvidTab:CreateButton({
     Name     = "🔍 Deduce Ghost Now",
     Callback = function()
         local count, possible = deduceGhosts()
-
         if count == 0 then
             Rayfield:Notify({ Title = "Evidence", Content = "Mark at least 1 evidence type first!", Duration = 3 })
             return
         end
-
         if #possible == 0 then
             deductLabel:Set("Possible: 0 — check inputs!")
             abilityLabel:Set("Ability: —")
@@ -476,11 +513,9 @@ EvidTab:CreateButton({
             })
             return
         end
-
         local names = {}
         for _, g in ipairs(possible) do table.insert(names, g.name) end
         deductLabel:Set("Possible (" .. #possible .. "): " .. table.concat(names, ", "))
-
         if #possible == 1 then
             local g = possible[1]
             abilityLabel:Set("Ability: " .. g.ability)
@@ -539,7 +574,6 @@ EvidTab:CreateButton({
 EvidTab:CreateButton({
     Name     = "🔎 Lookup Ghost Ability by Name",
     Callback = function()
-        -- cycles through all ghosts on repeated press; simple solution
         local gType = getGhostType()
         for _, g in ipairs(GHOST_DATA) do
             if g.name:lower() == gType:lower() then
@@ -555,9 +589,6 @@ EvidTab:CreateButton({
     end,
 })
 
--- ============================================================
---  TAB 3 — 🔮 ESP
--- ============================================================
 local ESPTab = Window:CreateTab("🔮 ESP", 4483362458)
 
 ESPTab:CreateSection("ESP Toggles")
@@ -660,9 +691,6 @@ ESPTab:CreateSlider({
     end,
 })
 
--- ============================================================
---  TAB 4 — ⚡ PLAYER
--- ============================================================
 local PlayerTab = Window:CreateTab("⚡ Player", 4483362458)
 
 PlayerTab:CreateSection("Movement")
@@ -790,22 +818,57 @@ PlayerTab:CreateToggle({
         if val then
             task.spawn(function()
                 while State.InfStamina do
-                    task.wait(0.08)
+                    task.wait(0.05)
                     local char = LocalPlayer.Character
-                    if not char then continue end
-                    local hum = char:FindFirstChildWhichIsA("Humanoid")
-                    if hum then
-                        for _, attrName in ipairs({"Energy","Stamina","Sanity","Mental","Fear"}) do
-                            if hum:GetAttribute(attrName) ~= nil then
-                                hum:SetAttribute(attrName, 100)
+                    local energyNames = {"Energy","Stamina","Sanity","Mental","Fear","SP","Endurance","Breath"}
+
+                    if char then
+                        local hum = char:FindFirstChildWhichIsA("Humanoid")
+                        if hum then
+                            for _, n in ipairs(energyNames) do
+                                if hum:GetAttribute(n) ~= nil then
+                                    pcall(function() hum:SetAttribute(n, 100) end)
+                                end
+                            end
+                        end
+                        for _, v in ipairs(char:GetDescendants()) do
+                            if v:IsA("NumberValue") or v:IsA("IntValue") then
+                                local nl = v.Name:lower()
+                                for _, n in ipairs(energyNames) do
+                                    if nl:find(n:lower()) then
+                                        pcall(function() v.Value = 100 end)
+                                        break
+                                    end
+                                end
                             end
                         end
                     end
+
+                    for _, n in ipairs(energyNames) do
+                        if LocalPlayer:GetAttribute(n) ~= nil then
+                            pcall(function() LocalPlayer:SetAttribute(n, 100) end)
+                        end
+                    end
+                    for _, v in ipairs(LocalPlayer:GetDescendants()) do
+                        if v:IsA("NumberValue") or v:IsA("IntValue") or v:IsA("FloatValue") then
+                            local nl = v.Name:lower()
+                            for _, n in ipairs(energyNames) do
+                                if nl:find(n:lower()) then
+                                    pcall(function() v.Value = 100 end)
+                                    break
+                                end
+                            end
+                        end
+                    end
+
                     for _, v in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
                         if v:IsA("NumberValue") or v:IsA("IntValue") then
-                            local n = v.Name:lower()
-                            if n:find("energy") or n:find("stamina") or n:find("sanity") then
-                                pcall(function() v.Value = 100 end)
+                            local nl = v.Name:lower()
+                            for _, n in ipairs(energyNames) do
+                                if nl:find(n:lower()) then
+                                    pcall(function() v.Value = 100 end)
+                                    break
+                                end
                             end
                         end
                     end
@@ -815,9 +878,6 @@ PlayerTab:CreateToggle({
     end,
 })
 
--- ============================================================
---  TAB 5 — 🌟 VISUALS
--- ============================================================
 local VisualsTab = Window:CreateTab("🌟 Visuals", 4483362458)
 
 VisualsTab:CreateSection("Lighting")
@@ -922,9 +982,6 @@ VisualsTab:CreateSlider({
     end,
 })
 
--- ============================================================
---  TAB 6 — 🏃 HUNT
--- ============================================================
 local HuntTab = Window:CreateTab("🏃 Hunt", 4483362458)
 
 HuntTab:CreateSection("Hunt Detection")
@@ -939,20 +996,12 @@ HuntTab:CreateToggle({
             task.spawn(function()
                 local wasHunting = false
                 while State.HuntWarning do
-                    task.wait(0.4)
-                    local isHunting = false
-                    for _, obj in ipairs(workspace:GetDescendants()) do
-                        if obj:IsA("BoolValue") and obj.Name:lower():find("hunt") and obj.Value then
-                            isHunting = true; break
-                        end
-                        if obj:IsA("Model") and obj:GetAttribute("IsHunting") then
-                            isHunting = true; break
-                        end
-                    end
+                    task.wait(0.2)
+                    local isHunting = detectHunt()
                     if isHunting and not wasHunting then
                         Rayfield:Notify({
-                            Title    = "⚠️ HUNT STARTED!",
-                            Content  = "Ghost is hunting! Hide immediately!",
+                            Title    = "⚠️ ОХОТА НАЧАЛАСЬ!",
+                            Content  = "Призрак охотится! Прячься немедленно!",
                             Duration = 6,
                             Image    = 4483362458,
                         })
@@ -1036,9 +1085,6 @@ HuntTab:CreateButton({
     end,
 })
 
--- ============================================================
---  TAB 7 — ⚙️ MISC
--- ============================================================
 local MiscTab = Window:CreateTab("⚙️ Misc", 4483362458)
 
 MiscTab:CreateSection("Anti-AFK")
@@ -1081,13 +1127,10 @@ MiscTab:CreateButton({
 })
 
 MiscTab:CreateSection("Info")
-MiscTab:CreateLabel("Astra Hub v2.0 | Demonology")
+MiscTab:CreateLabel("Astra Hub v1.0 | Demonology")
 MiscTab:CreateLabel("UI: Rayfield Library by Sirius")
 MiscTab:CreateLabel("Ghost DB: 23 types | Evidence: 8 types")
 
--- ============================================================
---  CHARACTER RESPAWN HANDLER
--- ============================================================
 LocalPlayer.CharacterAdded:Connect(function(char)
     Character = char
     Humanoid  = char:WaitForChild("Humanoid")
@@ -1098,11 +1141,8 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     end
 end)
 
--- ============================================================
---  WELCOME NOTIFICATION
--- ============================================================
 Rayfield:Notify({
-    Title    = "✨ Astra Hub v2.0",
+    Title    = "✨ Astra Hub v1.0",
     Content  = "Loaded! 23 ghosts · 8 evidence types. Good luck, hunter.",
     Duration = 5,
     Image    = 4483362458,
