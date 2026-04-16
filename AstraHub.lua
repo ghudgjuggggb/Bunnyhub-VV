@@ -28,6 +28,7 @@ local State = {
     AntiAFK        = false,
     RemoveFog      = false,
     RemovePostFX   = false,
+    AntiSex        = false,
 }
 
 local EvidenceFound = {
@@ -96,7 +97,7 @@ local FlyBodyGyro   = nil
 local Window = Rayfield:CreateWindow({
     Name            = "Astra Hub",
     LoadingTitle    = "Astra Hub",
-    LoadingSubtitle = "Demonology Edition v1.0",
+    LoadingSubtitle = "Demonology Edition v2.0",
     ConfigurationSaving = {
         Enabled    = true,
         FolderName = "AstraHub",
@@ -105,6 +106,10 @@ local Window = Rayfield:CreateWindow({
     Discord   = { Enabled = false },
     KeySystem = false,
 })
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- UTILITY FUNCTIONS
+-- ═══════════════════════════════════════════════════════════════════════════
 
 local function findGhost()
     for _, name in ipairs({"Ghost","GhostModel","Spirit","Entity"}) do
@@ -129,6 +134,15 @@ local function getGhostType()
         or ghost:GetAttribute("ghost")
         or ghost.Name
         or "Unknown"
+end
+
+local function getGhostRoomPosition()
+    local ghost = findGhost()
+    if not ghost then return nil end
+    local part = ghost:IsA("BasePart") and ghost
+        or ghost:FindFirstChildWhichIsA("BasePart", true)
+    if part then return part.Position end
+    return nil
 end
 
 local function addESP(obj, fillColor, outlineColor, labelText)
@@ -279,7 +293,8 @@ local ITEM_KEYWORDS = {
     "UVLight","Flashlight","Crucifix","VideoCamera",
     "MusicBox","Candle","SaltShaker","TripMine",
     "Parabolic","Journal","CrossNecklace",
-    "LaserProjector","LIDAR",
+    "LaserProjector","LIDAR","Blacklight","FlowerPot",
+    "SpiritBook","FlowerPot",
 }
 
 local function isItem(name)
@@ -387,6 +402,144 @@ local function detectHunt()
     return false
 end
 
+local function antiSexEscape()
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    local hideNames = {"Closet","Wardrobe","Cabinet","Locker","HidingSpot","Cupboard"}
+    local best, bestDist = nil, math.huge
+    for _, name in ipairs(hideNames) do
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if obj:IsA("BasePart") and obj.Name:lower():find(name:lower()) then
+                local d = (obj.Position - root.Position).Magnitude
+                if d < bestDist then bestDist = d; best = obj end
+            end
+        end
+    end
+    if best then
+        root.CFrame = best.CFrame + Vector3.new(0, 3, 0)
+        Rayfield:Notify({
+            Title    = "🍆 Anti Sex ACTIVATED",
+            Content  = "Escaped to hiding spot! Ghost can't touch you now.",
+            Duration = 5,
+            Image    = 4483362458,
+        })
+        return
+    end
+
+    local spawnNames = {"SpawnLocation","Spawn","Entrance","Exit","LobbySpawn","Lobby"}
+    for _, name in ipairs(spawnNames) do
+        local obj = workspace:FindFirstChild(name, true)
+        if obj and obj:IsA("BasePart") then
+            root.CFrame = obj.CFrame + Vector3.new(0, 5, 0)
+            Rayfield:Notify({
+                Title    = "🍆 Anti Sex ACTIVATED",
+                Content  = "Fled to entrance. Virginity secured!",
+                Duration = 5,
+                Image    = 4483362458,
+            })
+            return
+        end
+    end
+
+    local ghost = findGhost()
+    if ghost then
+        local ghostPart = ghost:IsA("BasePart") and ghost
+            or ghost:FindFirstChildWhichIsA("BasePart", true)
+        if ghostPart then
+            local awayDir = (root.Position - ghostPart.Position).Unit
+            root.CFrame = CFrame.new(root.Position + awayDir * 60 + Vector3.new(0, 5, 0))
+            Rayfield:Notify({
+                Title    = "🍆 Anti Sex ACTIVATED",
+                Content  = "YEETED far from ghost!",
+                Duration = 5,
+                Image    = 4483362458,
+            })
+        end
+    end
+end
+
+
+
+
+
+
+
+
+
+-- Проверить атрибуты призрака напрямую — иногда тип прямо записан
+local function tryReadGhostTypeDirectly()
+    local ghost = findGhost()
+    if not ghost then return nil end
+
+    -- Читаем все атрибуты
+    local attrs = ghost:GetAttributes()
+    local typeAttr = attrs["GhostType"] or attrs["Type"] or attrs["ghost"] or attrs["GhostName"]
+    if typeAttr and type(typeAttr) == "string" and typeAttr ~= "" then
+        return typeAttr
+    end
+
+    -- Ищем StringValue внутри призрака
+    for _, v in ipairs(ghost:GetDescendants()) do
+        if v:IsA("StringValue") then
+            local nl = v.Name:lower()
+            if nl:find("type") or nl:find("ghost") or nl:find("name") then
+                if v.Value and v.Value ~= "" then
+                    return v.Value
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+-- Финальная функция определения призрака по уликам
+local function finalGhostDeduction()
+    local directType = tryReadGhostTypeDirectly()
+    if directType then
+        -- Ищем в базе данных
+        for _, g in ipairs(GHOST_DATA) do
+            if g.name:lower() == directType:lower() then
+                return {
+                    method = "direct",
+                    name   = g.name,
+                    ability = g.ability,
+                    evidence = g.evidence,
+                }
+            end
+        end
+        return { method = "direct", name = directType, ability = "Смотри базу данных", evidence = {} }
+    end
+
+    -- Дедукция по уликам
+    local count, possible = deduceGhosts()
+    if #possible == 1 then
+        return {
+            method   = "evidence",
+            name     = possible[1].name,
+            ability  = possible[1].ability,
+            evidence = possible[1].evidence,
+        }
+    elseif #possible > 1 then
+        local names = {}
+        for _, g in ipairs(possible) do table.insert(names, g.name) end
+        return {
+            method   = "partial",
+            names    = names,
+            possible = possible,
+        }
+    end
+
+    return nil
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ВКЛАДКИ UI
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- ─── GHOST TAB ───────────────────────────────────────────────────────────────
 local GhostTab = Window:CreateTab("👻 Ghost", 4483362458)
 
 GhostTab:CreateSection("Identification")
@@ -459,6 +612,7 @@ GhostTab:CreateSection("Evidence Reference (all 8 types)")
 GhostTab:CreateLabel("📡 EMF Level 5  |  🖐 Handprints  |  📻 Spirit Box  |  🔮 Ghost Orb")
 GhostTab:CreateLabel("🧊 Freezing Temps  |  📝 Ghost Writing  |  🔦 Laser Projector  |  💀 Wither")
 
+-- ─── EVIDENCE TAB ────────────────────────────────────────────────────────────
 local EvidTab = Window:CreateTab("📋 Evidence", 4483362458)
 
 EvidTab:CreateSection("Mark Evidence Found")
@@ -589,6 +743,7 @@ EvidTab:CreateButton({
     end,
 })
 
+-- ─── ESP TAB ─────────────────────────────────────────────────────────────────
 local ESPTab = Window:CreateTab("🔮 ESP", 4483362458)
 
 ESPTab:CreateSection("ESP Toggles")
@@ -691,6 +846,7 @@ ESPTab:CreateSlider({
     end,
 })
 
+-- ─── PLAYER TAB ──────────────────────────────────────────────────────────────
 local PlayerTab = Window:CreateTab("⚡ Player", 4483362458)
 
 PlayerTab:CreateSection("Movement")
@@ -821,7 +977,6 @@ PlayerTab:CreateToggle({
                     task.wait(0.05)
                     local char = LocalPlayer.Character
                     local energyNames = {"Energy","Stamina","Sanity","Mental","Fear","SP","Endurance","Breath"}
-
                     if char then
                         local hum = char:FindFirstChildWhichIsA("Humanoid")
                         if hum then
@@ -843,33 +998,9 @@ PlayerTab:CreateToggle({
                             end
                         end
                     end
-
-                    for _, n in ipairs(energyNames) do
+                    for _, n in ipairs({"Energy","Stamina","Sanity","Mental","Fear","SP","Endurance","Breath"}) do
                         if LocalPlayer:GetAttribute(n) ~= nil then
                             pcall(function() LocalPlayer:SetAttribute(n, 100) end)
-                        end
-                    end
-                    for _, v in ipairs(LocalPlayer:GetDescendants()) do
-                        if v:IsA("NumberValue") or v:IsA("IntValue") or v:IsA("FloatValue") then
-                            local nl = v.Name:lower()
-                            for _, n in ipairs(energyNames) do
-                                if nl:find(n:lower()) then
-                                    pcall(function() v.Value = 100 end)
-                                    break
-                                end
-                            end
-                        end
-                    end
-
-                    for _, v in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
-                        if v:IsA("NumberValue") or v:IsA("IntValue") then
-                            local nl = v.Name:lower()
-                            for _, n in ipairs(energyNames) do
-                                if nl:find(n:lower()) then
-                                    pcall(function() v.Value = 100 end)
-                                    break
-                                end
-                            end
                         end
                     end
                 end
@@ -878,6 +1009,7 @@ PlayerTab:CreateToggle({
     end,
 })
 
+-- ─── VISUALS TAB ─────────────────────────────────────────────────────────────
 local VisualsTab = Window:CreateTab("🌟 Visuals", 4483362458)
 
 VisualsTab:CreateSection("Lighting")
@@ -982,6 +1114,7 @@ VisualsTab:CreateSlider({
     end,
 })
 
+-- ─── HUNT TAB ────────────────────────────────────────────────────────────────
 local HuntTab = Window:CreateTab("🏃 Hunt", 4483362458)
 
 HuntTab:CreateSection("Hunt Detection")
@@ -1000,8 +1133,8 @@ HuntTab:CreateToggle({
                     local isHunting = detectHunt()
                     if isHunting and not wasHunting then
                         Rayfield:Notify({
-                            Title    = "⚠️ ОХОТА НАЧАЛАСЬ!",
-                            Content  = "Призрак охотится! Прячься немедленно!",
+                            Title    = "⚠️ HUNT STARTED!",
+                            Content  = "Ghost is hunting! Hide immediately!",
                             Duration = 6,
                             Image    = 4483362458,
                         })
@@ -1012,6 +1145,53 @@ HuntTab:CreateToggle({
                 end
             end)
         end
+    end,
+})
+
+HuntTab:CreateSection("🍆 Anti Sex")
+HuntTab:CreateLabel("Auto-teleports you to safety the moment a hunt begins.")
+
+HuntTab:CreateToggle({
+    Name         = "🍆 Anti Sex (Auto Hunt Escape)",
+    CurrentValue = false,
+    Flag         = "AntiSex",
+    Callback     = function(val)
+        State.AntiSex = val
+        if val then
+            Rayfield:Notify({
+                Title    = "🍆 Anti Sex ENABLED",
+                Content  = "You are now protected. Ghost can't get to you.",
+                Duration = 4,
+                Image    = 4483362458,
+            })
+            task.spawn(function()
+                local wasHunting = false
+                while State.AntiSex do
+                    task.wait(0.15)
+                    local isHunting = detectHunt()
+                    if isHunting and not wasHunting then
+                        wasHunting = true
+                        antiSexEscape()
+                    elseif not isHunting then
+                        wasHunting = false
+                    end
+                end
+            end)
+        else
+            Rayfield:Notify({
+                Title    = "🍆 Anti Sex DISABLED",
+                Content  = "You're on your own now. Good luck...",
+                Duration = 3,
+                Image    = 4483362458,
+            })
+        end
+    end,
+})
+
+HuntTab:CreateButton({
+    Name     = "🍆 Escape NOW (Manual)",
+    Callback = function()
+        antiSexEscape()
     end,
 })
 
@@ -1085,6 +1265,7 @@ HuntTab:CreateButton({
     end,
 })
 
+-- ─── MISC TAB ────────────────────────────────────────────────────────────────
 local MiscTab = Window:CreateTab("⚙️ Misc", 4483362458)
 
 MiscTab:CreateSection("Anti-AFK")
@@ -1126,10 +1307,68 @@ MiscTab:CreateButton({
     end,
 })
 
+MiscTab:CreateSection("🎵 Music Player")
+
+local currentSound = nil
+local musicVolume  = 1
+
+MiscTab:CreateButton({
+    Name     = "▶️ Play: Dabbackwood — Kod Giass",
+    Callback = function()
+        if currentSound then
+            pcall(function() currentSound:Stop(); currentSound:Destroy() end)
+            currentSound = nil
+        end
+        local sound = Instance.new("Sound")
+        sound.SoundId  = "rbxassetid://76559611990246"
+        sound.Volume   = musicVolume
+        sound.Looped   = true
+        sound.Parent   = workspace
+        sound:Play()
+        currentSound = sound
+        Rayfield:Notify({
+            Title    = "🎵 Now Playing",
+            Content  = "Dabbackwood — Kod Giass",
+            Duration = 4,
+            Image    = 4483362458,
+        })
+    end,
+})
+
+MiscTab:CreateButton({
+    Name     = "⏹️ Stop Music",
+    Callback = function()
+        if currentSound then
+            pcall(function() currentSound:Stop(); currentSound:Destroy() end)
+            currentSound = nil
+            Rayfield:Notify({ Title = "🎵 Music", Content = "Stopped.", Duration = 2, Image = 4483362458 })
+        else
+            Rayfield:Notify({ Title = "🎵 Music", Content = "Nothing is playing.", Duration = 2, Image = 4483362458 })
+        end
+    end,
+})
+
+MiscTab:CreateSlider({
+    Name         = "🔊 Volume",
+    Range        = {0, 100},
+    Increment    = 5,
+    Suffix       = "%",
+    CurrentValue = 100,
+    Flag         = "MusicVolume",
+    Callback     = function(val)
+        musicVolume = val / 100
+        if currentSound then
+            currentSound.Volume = musicVolume
+        end
+    end,
+})
+
 MiscTab:CreateSection("Info")
-MiscTab:CreateLabel("Astra Hub v1.0 | Demonology")
+MiscTab:CreateLabel("Astra Hub v2.0 | Demonology")
 MiscTab:CreateLabel("UI: Rayfield Library by Sirius")
 MiscTab:CreateLabel("Ghost DB: 23 types | Evidence: 8 types")
+
+-- ─────────────────────────────────────────────────────────────────────────────
 
 LocalPlayer.CharacterAdded:Connect(function(char)
     Character = char
@@ -1142,8 +1381,8 @@ LocalPlayer.CharacterAdded:Connect(function(char)
 end)
 
 Rayfield:Notify({
-    Title    = "✨ Astra Hub v1.0",
-    Content  = "Loaded! 23 ghosts · 8 evidence types. Good luck, hunter.",
+    Title    = "✨ Astra Hub v2.0",
+    Content  = "Загружено! 23 призрака · 8 улик · 🎵 Muzik",
     Duration = 5,
     Image    = 4483362458,
 })
