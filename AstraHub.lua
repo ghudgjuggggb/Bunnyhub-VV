@@ -1312,30 +1312,99 @@ MiscTab:CreateSection("🎵 Music Player")
 local currentSound = nil
 local musicVolume  = 1
 local SoundService = game:GetService("SoundService")
+local HttpService  = game:GetService("HttpService")
 
-MiscTab:CreateButton({
-    Name     = "▶️ Play: Dabbackwood — Kod Giass",
-    Callback = function()
-        if currentSound then
-            pcall(function() currentSound:Stop(); currentSound:Destroy() end)
-            currentSound = nil
+-- Список треков: { name, videoId }
+local TRACKS = {
+    { name = "Dabbackwood — Kod Giass", id = "ZcYcjiCXhcc" },
+}
+
+-- Piped instances (fallback chain)
+local PIPED = {
+    "https://pipedapi.kavin.rocks",
+    "https://piped-api.garudalinux.org",
+    "https://api.piped.projectsegfau.lt",
+}
+
+local function httpGet(url)
+    local requestFn = (syn and syn.request)
+        or (typeof(request) == "function" and request)
+        or (typeof(http_request) == "function" and http_request)
+    if not requestFn then return nil end
+    local ok, res = pcall(requestFn, { Url = url, Method = "GET" })
+    if ok and res and res.StatusCode == 200 then
+        return res.Body
+    end
+    return nil
+end
+
+local function getStreamUrl(videoId)
+    for _, base in ipairs(PIPED) do
+        local body = httpGet(base .. "/streams/" .. videoId)
+        if body then
+            local ok, data = pcall(function() return HttpService:JSONDecode(body) end)
+            if ok and data and data.audioStreams and #data.audioStreams > 0 then
+                local best = data.audioStreams[1]
+                for _, s in ipairs(data.audioStreams) do
+                    if (s.bitrate or 0) > (best.bitrate or 0) then
+                        best = s
+                    end
+                end
+                return best.url
+            end
+        end
+    end
+    return nil
+end
+
+local function playTrack(track)
+    if currentSound then
+        pcall(function() currentSound:Stop(); currentSound:Destroy() end)
+        currentSound = nil
+    end
+    Rayfield:Notify({ Title = "🎵 Загрузка...", Content = track.name, Duration = 4, Image = 4483362458 })
+    task.spawn(function()
+        local url = getStreamUrl(track.id)
+        if not url then
+            Rayfield:Notify({
+                Title   = "🎵 Ошибка",
+                Content = "Не удалось получить поток.\nПроверь интернет / executor.",
+                Duration = 6,
+            })
+            return
         end
         local sound = Instance.new("Sound")
-        sound.SoundId  = "rbxassetid://76559611990246"
-        sound.Volume   = musicVolume
-        sound.Looped   = true
-        sound.RollOffMaxDistance = 0
-        sound.Parent   = SoundService
+        sound.SoundId = url
+        sound.Volume  = musicVolume
+        sound.Looped  = true
+        sound.Parent  = SoundService
+        local waited = 0
+        while not sound.IsLoaded and waited < 15 do
+            task.wait(0.5); waited += 0.5
+        end
+        if not sound.IsLoaded then
+            sound:Destroy()
+            Rayfield:Notify({ Title = "🎵 Ошибка", Content = "Аудио не загрузилось.", Duration = 5 })
+            return
+        end
         sound:Play()
         currentSound = sound
         Rayfield:Notify({
-            Title    = "🎵 Now Playing",
-            Content  = "Dabbackwood — Kod Giass",
+            Title   = "🎵 Now Playing",
+            Content = track.name,
             Duration = 4,
-            Image    = 4483362458,
+            Image   = 4483362458,
         })
-    end,
-})
+    end)
+end
+
+for _, track in ipairs(TRACKS) do
+    local t = track
+    MiscTab:CreateButton({
+        Name     = "▶️ " .. t.name,
+        Callback = function() playTrack(t) end,
+    })
+end
 
 MiscTab:CreateButton({
     Name     = "⏹️ Stop Music",
@@ -1359,9 +1428,7 @@ MiscTab:CreateSlider({
     Flag         = "MusicVolume",
     Callback     = function(val)
         musicVolume = val / 100
-        if currentSound then
-            currentSound.Volume = musicVolume
-        end
+        if currentSound then currentSound.Volume = musicVolume end
     end,
 })
 
