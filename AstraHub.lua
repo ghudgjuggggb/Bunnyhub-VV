@@ -1311,6 +1311,7 @@ MiscTab:CreateSection("🎵 Music Player")
 
 local currentSound = nil
 local musicVolume  = 1
+local SoundService = game:GetService("SoundService")
 
 MiscTab:CreateButton({
     Name     = "▶️ Play: Dabbackwood — Kod Giass",
@@ -1323,7 +1324,8 @@ MiscTab:CreateButton({
         sound.SoundId  = "rbxassetid://76559611990246"
         sound.Volume   = musicVolume
         sound.Looped   = true
-        sound.Parent   = workspace
+        sound.RollOffMaxDistance = 0
+        sound.Parent   = SoundService
         sound:Play()
         currentSound = sound
         Rayfield:Notify({
